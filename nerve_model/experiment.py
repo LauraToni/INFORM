@@ -22,9 +22,9 @@ import numpy as np
 import scipy.linalg
 from scipy.io import savemat
 
-from fiber_population import MotorFiberPopulation
-from nerve_section import CircularFascicleTopography
-from recruitment_curves import RecruitmentCurves
+from nerve_model.fiber_population import MotorFiberPopulation
+from nerve_model.nerve_section import CircularFascicleTopography
+from nerve_model.recruitment_curves import RecruitmentCurves
 
 
 ActivationMethod = Literal["from_self", "mirror", "actfun"]

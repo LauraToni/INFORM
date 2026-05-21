@@ -1,0 +1,13 @@
+numpy
+scipy
+matplotlib
+pandas
+scikit-learn
+xgboost
+h5py
+joblib
+tqdm
+modAL
+pyswarms
+jupyter
+ipykernel

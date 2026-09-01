@@ -5,7 +5,7 @@
 INFORM reconstructs the internal *functional* organization of a peripheral
 nerve directly from standard post-implantation calibration data (monopolar
 recruitment curves), and uses the inferred model to design selective
-stimulation protocols — without requiring direct knowledge of the nerve's
+stimulation protocols, without requiring direct knowledge of the nerve's
 internal anatomy.
 
 This repository contains the code accompanying the paper *"Inferring the
@@ -57,12 +57,6 @@ INFORM/
 └── DATA_README.md          # data dictionary (formats, shapes, conventions)
 ```
 
-> **Note on `localization_utils_reference.py`.** This file holds the validated
-> optimization logic that produced the paper's results. Do not refactor its
-> scientific behavior. New code should call the wrapper
-> `localize_functional_cluster` (in `localization_result.py`), which delegates
-> to the reference routine without changing it.
-
 ## Installation
 
 Requires Python ≥ 3.9.
@@ -73,11 +67,6 @@ cd INFORM
 python -m venv .venv && source .venv/bin/activate    # or conda
 pip install -e .
 ```
-
-This installs INFORM together with its dependencies, including
-[`modAL`](https://github.com/modAL-python/modAL) (Bayesian optimization) and
-`pyswarms` (PSO). `modAL` is installed from PyPI — it must **not** be vendored
-into the repository.
 
 ### Quick check
 
@@ -93,7 +82,7 @@ run on synthetic objects.
 
 ## Data
 
-The numerical data are hosted on Zenodo: **DOI to be added on release.**
+The numerical data are hosted on Zenodo: **10.5281/zenodo.22229593**
 
 After downloading, expand the archive so that `--project-folder` points to the
 root of the expected folder tree. The scripts assume a specific layout

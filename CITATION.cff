@@ -19,8 +19,8 @@ authors:
 license: MIT
 version: 0.1.0
 # Add on release:
-# doi: 10.5281/zenodo.XXXXXXX
-# repository-code: "https://github.com/<your-org>/INFORM"
+# doi: 10.5281/zenodo.22229593
+# repository-code: "https://github.com/LauraToni/INFORM"
 preferred-citation:
   type: article
   title: "Inferring the internal functional organization of peripheral nerves for selective electrical stimulation"

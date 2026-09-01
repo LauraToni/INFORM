@@ -14,9 +14,7 @@ stimulation"*. The heavy data (lead-field matrices, trained surrogate
 classifiers, nerve sections) are archived separately on Zenodo (see
 [Data](#data)).
 
-<!-- Add once minted:
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
--->
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22229593.svg)](https://doi.org/10.5281/zenodo.22229593)
 
 ## What the method does
 

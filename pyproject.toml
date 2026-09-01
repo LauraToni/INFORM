@@ -6,16 +6,26 @@ build-backend = "setuptools.build_meta"
 name = "inform"
 version = "0.1.0"
 description = "Inference of Neural Functional Organization from Recruitment Matching"
-authors = [
-    {name = "Laura Toni"}
-]
 readme = "README.md"
 requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Laura Toni" },
+    { name = "Veronica Fossati" },
+    { name = "Simone Romeni", email = "romeni.simone@hsr.it" },
+]
+keywords = [
+    "peripheral nerve stimulation",
+    "neuroprosthetics",
+    "Bayesian optimization",
+    "selective stimulation",
+]
 
 dependencies = [
     "numpy",
     "scipy",
     "matplotlib",
+    "seaborn",
     "pandas",
     "scikit-learn",
     "xgboost",
@@ -26,5 +36,18 @@ dependencies = [
     "pyswarms",
 ]
 
-[tool.setuptools.packages.find]
-where = ["."]
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "jupyter",
+    "ipykernel",
+]
+
+[tool.setuptools]
+# List packages explicitly so stray folders (e.g. a vendored modAL, build
+# artifacts, notebooks) are never picked up by the build.
+packages = [
+    "nerve_model",
+    "localization",
+    "selectivity_optimization",
+]

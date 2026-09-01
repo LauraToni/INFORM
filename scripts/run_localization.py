@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import pickle
+import sys
 import time
 from pathlib import Path
 
@@ -36,9 +37,34 @@ from nerve_model.fiber_population import MotorFiberPopulation
 from localization.candidate_generation import create_loc_candidates
 from localization.bayesian_localization import performLocalizationCluster
 from localization.visualization import (
-    plot_recruitment_curves,
+    plot_recruitment_extended,
     plot_recruitment_superposed,
 )
+
+# Backward-compatible alias for older script naming.
+plot_recruitment_curves = plot_recruitment_extended
+
+# -----------------------------------------------------------------------------
+# Backward compatibility for legacy pickle files
+# -----------------------------------------------------------------------------
+# Older experiment objects were pickled when classes were imported from modules
+# such as ``experiment`` and ``fiber_population``. These aliases allow Python to
+# load those files after moving the code into the ``nerve_model`` package.
+import nerve_model.experiment as experiment
+import nerve_model.fiber_population as fiber_population
+import nerve_model.nerve_section as nerve_section
+import nerve_model.histological_nerve_section as histological_nerve_section
+import nerve_model.recruitment_curves as recruitment_curves
+import nerve_model.implant as implant
+
+sys.modules["experiment"] = experiment
+sys.modules["fiber_population"] = fiber_population
+sys.modules["nerve_section"] = nerve_section
+sys.modules["recruitment_curves"] = recruitment_curves
+sys.modules["implant"] = implant
+# Legacy median pickles saved the polygonal topography as 'nerve_section_2'.
+sys.modules["nerve_section_2"] = histological_nerve_section
+
 
 
 MEDIAN_COLORS = [
@@ -81,6 +107,15 @@ def parse_args() -> argparse.Namespace:
         "--median",
         action="store_true",
         help="Use median-nerve folder naming convention.",
+    )
+
+    parser.add_argument(
+        "--nerve-folder",
+        type=str,
+        default="nerve_2",
+        help="Name of the circular-nerve folder under experiments/ and "
+             "surrogate_experiments/ (e.g. nerve_1, nerve_2, nerve_3). "
+             "Ignored when --median is set. Defaults to nerve_2.",
     )
 
     parser.add_argument("--block-id", type=int, default=10)
@@ -127,8 +162,8 @@ def get_nerve_folders(args: argparse.Namespace) -> tuple[str, str, list[str]]:
         surrogate_nerve_folder = f"{true_nerve_folder}{args.shift}"
         colors = MEDIAN_COLORS
     else:
-        true_nerve_folder = "nerve_2"
-        surrogate_nerve_folder = "nerve_2"
+        true_nerve_folder = args.nerve_folder
+        surrogate_nerve_folder = args.nerve_folder
         colors = CIRCULAR_COLORS
 
     return true_nerve_folder, surrogate_nerve_folder, colors
@@ -148,7 +183,7 @@ def save_pickle(path: Path, obj) -> None:
 
 
 def load_experiments(args: argparse.Namespace):
-    """Load predicted full experiment and return base folders."""
+    """Load inferred full experiment and return base folders."""
     true_nerve_folder, surrogate_nerve_folder, colors = get_nerve_folders(args)
 
     surrogate_base_path = (
@@ -167,10 +202,13 @@ def load_experiments(args: argparse.Namespace):
         / args.trial
     )
 
-    predicted_experiment_path = surrogate_base_path / f"experiment_trial_{args.trial}.pkl"
-    full_pred_experiment = load_pickle(predicted_experiment_path)
+    # Ensure the results folder exists before any plot/pickle is written.
+    (surrogate_base_path / "results").mkdir(parents=True, exist_ok=True)
 
-    return full_pred_experiment, true_base_path, surrogate_base_path, colors
+    inferred_experiment_path = surrogate_base_path / f"experiment_trial_{args.trial}.pkl"
+    full_inferred_experiment = load_pickle(inferred_experiment_path)
+
+    return full_inferred_experiment, true_base_path, surrogate_base_path, colors
 
 
 def get_population_filename(args: argparse.Namespace, population_id: int) -> str:
@@ -191,9 +229,9 @@ def compute_reference_recruitment_curves(true_experiment, args: argparse.Namespa
     return recruitment_curves
 
 
-def build_candidate_grid(full_pred_experiment, args: argparse.Namespace):
+def build_candidate_grid(full_inferred_experiment, args: argparse.Namespace):
     """Build and standardize localization candidate grid."""
-    nerve_radius = full_pred_experiment.nerve_topography.nerve_radius
+    nerve_radius = full_inferred_experiment.nerve_topography.nerve_radius
 
     candidates_grid = create_loc_candidates(
         nerve_radius=nerve_radius,
@@ -211,7 +249,7 @@ def build_candidate_grid(full_pred_experiment, args: argparse.Namespace):
 
 
 def run_cluster_localization(
-    full_pred_experiment,
+    full_inferred_experiment,
     full_pred_lfm,
     true_recruitment_values: np.ndarray,
     candidates_grid: np.ndarray,
@@ -222,7 +260,7 @@ def run_cluster_localization(
     n_clusters = true_recruitment_values.shape[1]
 
     experiment_info = {
-        "full_experiment": full_pred_experiment,
+        "full_experiment": full_inferred_experiment,
         "full_lfm": full_pred_lfm,
         "amp_lims": np.array([args.min_stim, args.max_stim]),
         "n_stims_per_site": args.n_stims_per_site,
@@ -231,7 +269,7 @@ def run_cluster_localization(
     kernel = Matern(
         length_scale=[1.0, 1.0, 1.0, 1.0],
         nu=2.5,
-        length_scale_bounds=(1e-5, float("inf")),
+        length_scale_bounds=(1e-5, 1e5),
     )
 
     x_clust = [None for _ in range(n_clusters)]
@@ -297,59 +335,59 @@ def run_cluster_localization(
     }
 
 
-def extract_predicted_cluster_parameters(localization_outputs, scaler, n_clusters: int):
+def extract_inferred_cluster_parameters(localization_outputs, scaler, n_clusters: int):
     """Convert best standardized candidates back to physical cluster parameters."""
-    cluster_locs_pred = np.zeros((n_clusters, 2))
-    cluster_std_pred = np.zeros(n_clusters)
-    cluster_num_pred = np.zeros(n_clusters)
+    cluster_locs_inferred = np.zeros((n_clusters, 2))
+    cluster_std_inferred = np.zeros(n_clusters)
+    cluster_num_inferred = np.zeros(n_clusters)
 
     for cluster_idx in range(n_clusters):
         best_candidate = localization_outputs["X_max_clust"][cluster_idx][-1].reshape(1, -1)
         best_candidate_real = scaler.inverse_transform(best_candidate)[0]
 
-        cluster_locs_pred[cluster_idx, :] = best_candidate_real[0:2]
-        cluster_std_pred[cluster_idx] = best_candidate_real[2]
-        cluster_num_pred[cluster_idx] = best_candidate_real[3]
+        cluster_locs_inferred[cluster_idx, :] = best_candidate_real[0:2]
+        cluster_std_inferred[cluster_idx] = best_candidate_real[2]
+        cluster_num_inferred[cluster_idx] = best_candidate_real[3]
 
-    return cluster_locs_pred, cluster_std_pred, cluster_num_pred
+    return cluster_locs_inferred, cluster_std_inferred, cluster_num_inferred
 
 
-def build_predicted_experiment(
-    full_pred_experiment,
-    cluster_locs_pred,
-    cluster_std_pred,
-    cluster_num_pred,
+def build_inferred_experiment(
+    full_inferred_experiment,
+    cluster_locs_inferred,
+    cluster_std_inferred,
+    cluster_num_inferred,
 ):
-    """Create predicted population and experiment from localized parameters."""
-    pred_population, pred_identities = MotorFiberPopulation.from_existing_population(
-        cluster_locs=cluster_locs_pred,
-        cluster_std=cluster_std_pred,
-        cluster_num=cluster_num_pred.astype(int),
-        fiber_population=full_pred_experiment.fiber_population,
+    """Create inferred population and experiment from localized parameters."""
+    inferred_population, inferred_identities = MotorFiberPopulation.from_existing_population(
+        cluster_locs=cluster_locs_inferred,
+        cluster_std=cluster_std_inferred,
+        cluster_num=cluster_num_inferred.astype(int),
+        fiber_population=full_inferred_experiment.fiber_population,
     )
 
-    pred_identities = pred_identities.astype(int)
+    inferred_identities = inferred_identities.astype(int)
 
-    pred_experiment = Experiment(
-        fiber_population=pred_population,
-        nerve_topography=full_pred_experiment.nerve_topography,
-        implant=full_pred_experiment.implant,
+    inferred_experiment = Experiment(
+        fiber_population=inferred_population,
+        nerve_topography=full_inferred_experiment.nerve_topography,
+        implant=full_inferred_experiment.implant,
     )
 
-    pred_experiment._activation_predictor = full_pred_experiment.activation_predictor
-    pred_experiment.load_lead_field_matrix(
-        full_experiment=full_pred_experiment,
-        lead_field_matrix=full_pred_experiment.lead_field_matrix,
-        identities=pred_identities,
+    inferred_experiment._activation_predictor = full_inferred_experiment.activation_predictor
+    inferred_experiment.load_lead_field_matrix(
+        full_experiment=full_inferred_experiment,
+        lead_field_matrix=full_inferred_experiment.lead_field_matrix,
+        identities=inferred_identities,
         save_to_hdf5=False,
     )
 
-    return pred_experiment, pred_population, pred_identities
+    return inferred_experiment, inferred_population, inferred_identities
 
 
 def run_population(
     population_id: int,
-    full_pred_experiment,
+    full_inferred_experiment,
     true_base_path: Path,
     surrogate_base_path: Path,
     colors: list[str],
@@ -381,33 +419,33 @@ def run_population(
         plt.close(fig)
 
     candidates_grid, standardized_candidates_grid, scaler = build_candidate_grid(
-        full_pred_experiment=full_pred_experiment,
+        full_inferred_experiment=full_inferred_experiment,
         args=args,
     )
 
     localization_outputs = run_cluster_localization(
-        full_pred_experiment=full_pred_experiment,
-        full_pred_lfm=full_pred_experiment.lead_field_matrix,
+        full_inferred_experiment=full_inferred_experiment,
+        full_pred_lfm=full_inferred_experiment.lead_field_matrix,
         true_recruitment_values=reference_rc_values,
         candidates_grid=candidates_grid,
         standardized_candidates_grid=standardized_candidates_grid,
         args=args,
     )
 
-    cluster_locs_pred, cluster_std_pred, cluster_num_pred = extract_predicted_cluster_parameters(
+    cluster_locs_inferred, cluster_std_inferred, cluster_num_inferred = extract_inferred_cluster_parameters(
         localization_outputs=localization_outputs,
         scaler=scaler,
         n_clusters=n_clusters,
     )
 
-    pred_experiment, pred_population, pred_identities = build_predicted_experiment(
-        full_pred_experiment=full_pred_experiment,
-        cluster_locs_pred=cluster_locs_pred,
-        cluster_std_pred=cluster_std_pred,
-        cluster_num_pred=cluster_num_pred,
+    inferred_experiment, inferred_population, inferred_identities = build_inferred_experiment(
+        full_inferred_experiment=full_inferred_experiment,
+        cluster_locs_inferred=cluster_locs_inferred,
+        cluster_std_inferred=cluster_std_inferred,
+        cluster_num_inferred=cluster_num_inferred,
     )
 
-    pred_recruitment_curves = pred_experiment.generate_recruitment_curves(
+    inferred_recruitment_curves = inferred_experiment.generate_recruitment_curves(
         amp_lims=np.array([args.min_stim, args.max_stim]),
         n_steps=args.n_stims_per_site,
         method="from_self",
@@ -416,7 +454,7 @@ def run_population(
     if args.save_plots:
         fig, _ = plot_recruitment_superposed(
             true_recruitment_curves=reference_rc_values,
-            pred_recruitment_curves=pred_recruitment_curves.recruitment_values,
+            inferred_recruitment_curves=inferred_recruitment_curves.recruitment_values,
             amplitudes=np.linspace(args.min_stim, args.max_stim, args.n_stims_per_site),
             n_sites=reference_rc_values.shape[0],
             n_clusters=reference_rc_values.shape[1],
@@ -437,9 +475,9 @@ def run_population(
         "scaler": scaler,
         "candidates_grid": candidates_grid,
         "localization_outputs": localization_outputs,
-        "pred_experiment": pred_experiment,
-        "pred_recruitment_curves": pred_recruitment_curves,
-        "pred_identities": pred_identities,
+        "pred_experiment": inferred_experiment,
+        "pred_recruitment_curves": inferred_recruitment_curves,
+        "pred_identities": inferred_identities,
     }
 
     results_filename = f"results_{args.trial}_pop_{population_id}_with_topography.pkl"
@@ -452,13 +490,13 @@ def main() -> None:
 
     np.set_printoptions(suppress=True)
 
-    full_pred_experiment, true_base_path, surrogate_base_path, colors = load_experiments(args)
+    full_inferred_experiment, true_base_path, surrogate_base_path, colors = load_experiments(args)
 
     for population_id in range(args.population_start, args.population_stop):
         print(f"Running population {population_id}")
         run_population(
             population_id=population_id,
-            full_pred_experiment=full_pred_experiment,
+            full_inferred_experiment=full_inferred_experiment,
             true_base_path=true_base_path,
             surrogate_base_path=surrogate_base_path,
             colors=colors,

@@ -957,11 +957,11 @@ class Experiment:
 
     @property
     def lead_field_matrix(self):
-        return self._lead_field_matrix
+        return self._lead_field_matrix  * 1e3
 
     @property
     def lead_field_matrix_per_fiber(self):
-        return self._lead_field_matrix_per_fiber
+        return self._lead_field_matrix_per_fiber  * 1e3
 
     @property
     def activation_predictor(self):

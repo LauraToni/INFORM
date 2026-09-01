@@ -247,12 +247,20 @@ class PolylinearFascicleTopography:
             )
 
         return np.vstack(accepted)[:n_points, :]
+    
+    @property
+    def fascicles(self):
+        return self._fascicles
 
     @property
-    def n_fascicles(self) -> int:
-        """Number of fascicles in the nerve section."""
+    def epineurium(self):
+        return self._epineurium
 
-        return len(self.fascicles)
+    @property
+    def n_fascicles(self):
+        if self.fascicles is not None:
+            return len(self.fascicles)
+        return 0
 
     @property
     def fascicles_areas(self) -> np.ndarray:

@@ -1,13 +1,11 @@
 """
 Candidate generation for INFORM localization.
 
-This module creates the finite candidate grid used by the Bayesian optimization
-localization routine. Candidate parameters are:
-
-1. cluster center x-coordinate;
-2. cluster center y-coordinate;
-3. cluster spatial standard deviation;
-4. number of fibers in the cluster.
+Candidate parameters are:
+1. x-coordinate of the candidate functional cluster center;
+2. y-coordinate of the candidate functional cluster center;
+3. spatial standard deviation of the candidate cluster;
+4. number of fibers in the candidate cluster.
 
 All spatial quantities are expressed in millimeters.
 """
@@ -15,76 +13,6 @@ All spatial quantities are expressed in millimeters.
 from __future__ import annotations
 
 import numpy as np
-
-
-def create_localization_candidates(
-    nerve_radius: float,
-    std_limits: tuple[float, float],
-    num_limits: tuple[int, int],
-    n_location_samples: tuple[int, int],
-    n_std_samples: int,
-    n_num_samples: int,
-) -> np.ndarray:
-    """Create a candidate grid for functional-cluster localization.
-
-    Parameters
-    ----------
-    nerve_radius : float
-        Radius of the circular nerve section.
-    std_limits : tuple of float
-        Lower and upper limits for the candidate cluster standard deviation.
-    num_limits : tuple of int
-        Lower and upper limits for the candidate number of fibers.
-    n_location_samples : tuple of int
-        Number of candidate x and y locations.
-    n_std_samples : int
-        Number of candidate standard-deviation values.
-    n_num_samples : int
-        Number of candidate fiber-count values.
-
-    Returns
-    -------
-    ndarray
-        Candidate grid with shape ``(n_candidates, 4)``. Columns correspond to
-        ``x``, ``y``, ``std``, and ``n_fibers``.
-    """
-    if nerve_radius <= 0:
-        raise ValueError("nerve_radius must be positive.")
-
-    if len(n_location_samples) != 2:
-        raise ValueError("n_location_samples must contain two values: (n_x, n_y).")
-
-    n_x, n_y = n_location_samples
-
-    if min(n_x, n_y, n_std_samples, n_num_samples) <= 0:
-        raise ValueError("All sampling counts must be positive.")
-
-    x_candidates = np.linspace(-nerve_radius, nerve_radius, n_x)
-    y_candidates = np.linspace(-nerve_radius, nerve_radius, n_y)
-    std_candidates = np.linspace(std_limits[0], std_limits[1], n_std_samples)
-    num_candidates = np.linspace(num_limits[0], num_limits[1], n_num_samples)
-
-    x_grid, y_grid, std_grid, num_grid = np.meshgrid(
-        x_candidates,
-        y_candidates,
-        std_candidates,
-        num_candidates,
-        indexing="ij",
-    )
-
-    candidates = np.column_stack(
-        (
-            x_grid.ravel(),
-            y_grid.ravel(),
-            std_grid.ravel(),
-            num_grid.ravel(),
-        )
-    )
-
-    distance_from_origin = np.sqrt(candidates[:, 0] ** 2 + candidates[:, 1] ** 2)
-    inside_nerve = distance_from_origin < nerve_radius
-
-    return candidates[inside_nerve]
 
 
 def create_loc_candidates(
@@ -95,16 +23,70 @@ def create_loc_candidates(
     nTriesStd,
     nTriesNum,
 ):
-    """Backward-compatible wrapper for older localization notebooks.
+    """Create the localization candidate grid.
 
-    This keeps the original function name and argument names while delegating to
-    :func:`create_localization_candidates`.
+    This keeps the original argument names and grid logic for compatibility
+    with the validated INFORM localization notebooks.
+
+    Returns
+    -------
+    ndarray
+        Candidate grid with shape ``(n_candidates, 4)``. Columns are
+        ``x``, ``y``, ``std``, and ``n_fibers``.
     """
-    return create_localization_candidates(
-        nerve_radius=nerve_radius,
-        std_limits=tuple(limCandidateStd),
-        num_limits=tuple(limCandidateNum),
-        n_location_samples=tuple(nTriesLocs),
-        n_std_samples=nTriesStd,
-        n_num_samples=nTriesNum,
+    limCandidatePosX = [-nerve_radius, nerve_radius]
+    limCandidatePosY = [-nerve_radius, nerve_radius]
+
+    nTotalCandidates = nTriesLocs[0] * nTriesLocs[1] * nTriesStd * nTriesNum
+
+    xCandidates = np.linspace(limCandidatePosX[0], limCandidatePosX[1], nTriesLocs[0])
+    yCandidates = np.linspace(limCandidatePosY[0], limCandidatePosY[1], nTriesLocs[1])
+    stdCandidates = np.linspace(limCandidateStd[0], limCandidateStd[1], nTriesStd)
+    numCandidates = np.linspace(limCandidateNum[0], limCandidateNum[1], nTriesNum)
+
+    xCandidates, yCandidates, stdCandidates, numCandidates = np.meshgrid(
+        xCandidates,
+        yCandidates,
+        stdCandidates,
+        numCandidates,
     )
+
+    xCandidates = np.reshape(xCandidates, [nTotalCandidates, 1])
+    yCandidates = np.reshape(yCandidates, [nTotalCandidates, 1])
+    stdCandidates = np.reshape(stdCandidates, [nTotalCandidates, 1])
+    numCandidates = np.reshape(numCandidates, [nTotalCandidates, 1])
+
+    dist_from_origin = np.sqrt(xCandidates**2 + yCandidates**2)
+    active_locs = dist_from_origin < nerve_radius
+
+    candidatesGrid = np.hstack(
+        (xCandidates, yCandidates, stdCandidates, numCandidates)
+    )
+    candidatesGrid = candidatesGrid[active_locs[:, 0], :]
+
+    return candidatesGrid
+
+
+def create_localization_candidates(
+    nerve_radius: float,
+    std_limits,
+    num_limits,
+    n_location_samples,
+    n_std_samples: int,
+    n_num_samples: int,
+):
+    """Alias with clearer argument names for new code."""
+    return create_loc_candidates(
+        nerve_radius=nerve_radius,
+        limCandidateStd=std_limits,
+        limCandidateNum=num_limits,
+        nTriesLocs=n_location_samples,
+        nTriesStd=n_std_samples,
+        nTriesNum=n_num_samples,
+    )
+
+
+__all__ = [
+    "create_loc_candidates",
+    "create_localization_candidates",
+]

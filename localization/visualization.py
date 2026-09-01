@@ -1,19 +1,15 @@
 """
 Visualization utilities for INFORM localization.
 
-These functions are kept outside the Bayesian localization core so that the
-algorithm can be imported and executed without plotting dependencies.
+These functions are plotting helpers only. They do not modify the localization
+algorithm or the underlying experiment objects.
 """
 
 from __future__ import annotations
 
-import pickle
-from pathlib import Path
-
 import matplotlib.pyplot as plt
 import numpy as np
-
-from nerve_model.experiment import Experiment
+import seaborn as sns
 
 
 DEFAULT_CLUSTER_COLORS = [
@@ -32,180 +28,226 @@ DEFAULT_CLUSTER_COLORS = [
 ]
 
 
-def plot_recruitment_curves(
-    recruitment_values: np.ndarray,
-    amplitudes: np.ndarray,
-    n_sites: int,
-    n_clusters: int,
+def plot_recruitment_extended(
+    true_recruitment_curves=None,
+    n_clusters=None,
+    amplitudes=None,
+    n_sites=None,
+    colorList=None,
+    title=None,
+    *,
+    recruitment_values=None,
     colors=None,
-    title: str | None = None,
 ):
     """Plot recruitment curves for each stimulation site.
 
-    Parameters
-    ----------
-    recruitment_values : ndarray
-        Recruitment values with shape ``(n_sites, n_clusters, n_amplitudes)``.
-    amplitudes : ndarray
-        Stimulation amplitudes.
-    n_sites : int
-        Number of stimulation sites.
-    n_clusters : int
-        Number of functional clusters.
-    colors : list, optional
-        Colors used for cluster curves.
-    title : str, optional
-        Figure title.
-
-    Returns
-    -------
-    tuple
-        Matplotlib ``(fig, axes)``.
+    Accepts both the canonical argument names (``true_recruitment_curves``,
+    ``colorList``) and the aliases used by the run scripts
+    (``recruitment_values``, ``colors``), so that all callers work unchanged.
     """
-    colors = colors or DEFAULT_CLUSTER_COLORS
+    # Normalize argument aliases.
+    if true_recruitment_curves is None and recruitment_values is not None:
+        true_recruitment_curves = recruitment_values
+    if colorList is None and colors is not None:
+        colorList = colors
+    if true_recruitment_curves is None:
+        raise ValueError(
+            "Provide recruitment curves via 'true_recruitment_curves' "
+            "(or the alias 'recruitment_values')."
+        )
 
-    n_cols = int(np.ceil(np.sqrt(n_sites)))
-    n_rows = int(np.ceil(n_sites / n_cols))
+    if colorList is None:
+        colorList = DEFAULT_CLUSTER_COLORS
 
-    fig, axes = plt.subplots(n_rows, n_cols, layout="constrained", squeeze=False)
-    axes_flat = axes.flatten()
+    xsub = np.ceil(np.sqrt(n_sites)).astype(int)
+    ysub = np.ceil(n_sites / xsub).astype(int)
 
-    for site_idx in range(n_sites):
-        ax = axes_flat[site_idx]
+    fig, ax = plt.subplots(xsub, ysub)
+    plt.subplots_adjust(
+        left=0.1,
+        bottom=0.1,
+        right=1.55,
+        top=0.7,
+        wspace=0.4,
+        hspace=0.5,
+    )
 
-        for cluster_idx in range(n_clusters):
-            ax.plot(
-                amplitudes,
-                recruitment_values[site_idx, cluster_idx, :].T,
-                color=colors[cluster_idx],
-            )
+    for i in range(xsub):
+        for j in range(ysub):
+            if i * ysub + j >= n_sites:
+                fig.delaxes(ax[i, j])
+                break
 
-        ax.set_title(f"{site_idx + 1}")
-        ax.set_ylim(0, 1)
-        ax.set_xlabel("Amplitude")
-        ax.set_ylabel("Recruitment")
-        ax.spines[["top", "right"]].set_visible(False)
-
-    for ax in axes_flat[n_sites:]:
-        ax.axis("off")
+            for k in range(n_clusters):
+                if n_sites == 1:
+                    ax.plot(
+                        amplitudes,
+                        true_recruitment_curves[:, k, :].T,
+                        color=colorList[k],
+                    )
+                    ax.set_xticks([0, amplitudes[-1]])
+                    ax.set_title(f"#{i * ysub + j + 1}")
+                    ax.set_ylim(0, 1)
+                else:
+                    ax[i, j].plot(
+                        amplitudes,
+                        true_recruitment_curves[i * ysub + j, k, :].T,
+                        color=colorList[k],
+                    )
+                    ax[i, j].set_xticks([0, amplitudes[-1]])
+                    ax[i, j].set_title(f"{i * ysub + j + 1}")
+                    ax[i, j].set_ylim(0, 1)
+                    ax[i, j].spines[["top", "right"]].set_visible(False)
 
     if title is not None:
-        fig.suptitle(title)
+        fig.suptitle(title, y=0.8)
 
-    return fig, axes
+    return fig, ax
 
 
 def plot_recruitment_superposed(
-    true_recruitment_curves: np.ndarray,
-    pred_recruitment_curves: np.ndarray,
-    amplitudes: np.ndarray,
-    n_sites: int,
-    n_clusters: int,
+    true_recruitment_curves,
+    pred_recruitment_curves=None,
+    inferred_recruitment_curves=None,
+    amplitudes=None,
+    n_sites=None,
+    n_clusters=None,
+    colorList=None,
+    title=None,
+    *,
     colors=None,
-    title: str | None = None,
 ):
-    """Plot true and predicted recruitment curves on the same axes.
+    """Plot true and inferred recruitment curves on the same axes.
 
-    True curves are plotted as solid lines; predicted curves are plotted as
-    dashed lines.
+    ``pred_recruitment_curves`` is kept for backward compatibility.
+    Prefer ``inferred_recruitment_curves`` in new code. The ``colors`` alias is
+    accepted for ``colorList`` so that the run scripts work unchanged.
     """
-    colors = colors or DEFAULT_CLUSTER_COLORS
+    if colorList is None and colors is not None:
+        colorList = colors
+    if colorList is None:
+        colorList = DEFAULT_CLUSTER_COLORS
 
-    n_cols = int(np.ceil(np.sqrt(n_sites)))
-    n_rows = int(np.ceil(n_sites / n_cols))
+    if inferred_recruitment_curves is None:
+        inferred_recruitment_curves = pred_recruitment_curves
 
-    fig, axes = plt.subplots(n_rows, n_cols, layout="constrained", squeeze=False)
-    axes_flat = axes.flatten()
+    if inferred_recruitment_curves is None:
+        raise ValueError(
+            "Provide either inferred_recruitment_curves or pred_recruitment_curves."
+        )
 
-    for site_idx in range(n_sites):
-        ax = axes_flat[site_idx]
+    xsub = np.ceil(np.sqrt(n_sites)).astype(int)
+    ysub = np.ceil(n_sites / xsub).astype(int)
 
-        for cluster_idx in range(n_clusters):
-            ax.plot(
-                amplitudes,
-                true_recruitment_curves[site_idx, cluster_idx, :].T,
-                color=colors[cluster_idx],
-            )
-            ax.plot(
-                amplitudes,
-                pred_recruitment_curves[site_idx, cluster_idx, :].T,
-                "--",
-                color=colors[cluster_idx],
-            )
+    fig, ax = plt.subplots(xsub, ysub, layout="constrained")
+    plt.subplots_adjust(
+        left=0.1,
+        bottom=0.1,
+        right=1.55,
+        top=0.7,
+        wspace=0.4,
+        hspace=0.7,
+    )
 
-        ax.set_title(f"{site_idx + 1}")
-        ax.set_ylim(0, 1.1)
-        ax.grid(axis="y")
-        ax.spines[["top", "right"]].set_visible(False)
+    for i in range(xsub):
+        for j in range(ysub):
+            if i * ysub + j >= n_sites:
+                fig.delaxes(ax[i, j])
+                break
 
-    for ax in axes_flat[n_sites:]:
-        ax.axis("off")
+            for k in range(n_clusters):
+                if n_sites == 1:
+                    ax.plot(
+                        amplitudes,
+                        true_recruitment_curves[:, k, :].T,
+                        color=colorList[k],
+                    )
+                    ax.plot(
+                        amplitudes,
+                        inferred_recruitment_curves[:, k, :].T,
+                        "--",
+                        color=colorList[k],
+                    )
+                    ax.set_xticks([0, amplitudes[-1]])
+                    ax.set_title(f"{i * ysub + j + 1}")
+                    ax.spines[["top", "right"]].set_visible(False)
+                    ax.grid(axis="y")
+                    ax.set_ylim(0, 1)
+                else:
+                    ax[i, j].plot(
+                        amplitudes,
+                        true_recruitment_curves[i * ysub + j, k, :].T,
+                        color=colorList[k],
+                    )
+                    ax[i, j].plot(
+                        amplitudes,
+                        inferred_recruitment_curves[i * ysub + j, k, :].T,
+                        "--",
+                        color=colorList[k],
+                    )
+                    ax[i, j].set_xticks([0, amplitudes[-1]])
+                    ax[i, j].set_title(f"{i * ysub + j + 1}")
+                    ax[i, j].grid(axis="y")
+                    ax[i, j].set_ylim(0, 1.1)
+                    ax[i, j].spines[["top", "right"]].set_visible(False)
+
+                    if i != xsub - 1:
+                        ax[i, j].set_xticks([])
 
     if title is not None:
         fig.suptitle(title, size=20)
 
-    return fig, axes
+    return fig, ax
 
 
 def plot_section(
     experiment,
     ax,
     colors=None,
+    act=False,
     activation=None,
-    cluster_centers=None,
+    pop_clusters=None,
     fiber_population=None,
-    radius: float = 2,
-    marker_color: str = "red",
+    topographic=True,
+    radius=2,
+    marker_color="red",
 ):
-    """Plot a nerve section with fibers, implant sites, and cluster centers.
+    """Plot nerve section, fibers, implant sites, and optional cluster centers."""
+    fill_color = "#f3f5f7"
 
-    Parameters
-    ----------
-    experiment : Experiment-like object
-        Experiment containing nerve topography and implant.
-    ax : matplotlib axis
-        Axis on which to plot.
-    colors : list, optional
-        Cluster colors.
-    activation : ndarray, optional
-        Binary activation vector used to gray out inactive fibers.
-    cluster_centers : ndarray, optional
-        Cluster centers with shape ``(n_clusters, 2)``.
-    fiber_population : MotorFiberPopulation-like object, optional
-        Fiber population to plot. Defaults to ``experiment.fiber_population``.
-    radius : float, default=2
-        Radius used for the background circle.
-    marker_color : str, default="red"
-        Color for stimulation site markers.
+    if colors:
+        all_colors = colors
+    else:
+        all_colors = DEFAULT_CLUSTER_COLORS
 
-    Returns
-    -------
-    matplotlib axis
-        Updated axis.
-    """
-    colors = colors or DEFAULT_CLUSTER_COLORS
-
-    nerve_background = plt.Circle(
+    nerve_section = plt.Circle(
         (0.0, 0.0),
         radius,
         fill=True,
         edgecolor="none",
-        facecolor="#f3f5f7",
-        label="Nerve section",
+        facecolor=fill_color,
+        label="Nerve and fascicle sections",
     )
-    ax.add_artist(nerve_background)
+
+    ax.set_aspect(1)
+    ax.add_artist(nerve_section)
 
     if fiber_population is None:
         fiber_population = experiment.fiber_population
 
     n_fibers = len(fiber_population.locs)
-    fiber_colors = [colors[int(fiber_population.cluster_ids[i])] for i in range(n_fibers)]
+    fiber_color = [
+        all_colors[fiber_population.cluster_ids[i].astype(int)]
+        for i in range(n_fibers)
+    ]
 
-    if activation is not None:
+    if act:
         fiber_colors = [
-            fiber_colors[idx] if is_active else "#ced4da"
-            for idx, is_active in enumerate(activation)
+            fiber_color[i_val] if val else "#ced4da"
+            for i_val, val in enumerate(activation)
         ]
+    else:
+        fiber_colors = fiber_color
 
     ax.scatter(
         fiber_population.locs[:, 0],
@@ -225,128 +267,112 @@ def plot_section(
         label="Sites",
     )
 
-    if experiment.nerve_topography is not None:
+    if topographic and experiment.nerve_topography is not None:
         experiment.nerve_topography.plot(ax=ax)
 
-    if cluster_centers is not None:
-        for cluster_idx, center in enumerate(cluster_centers):
+    if pop_clusters:
+        n_clusters = len(pop_clusters[0])
+        for i in range(n_clusters):
             ax.scatter(
-                center[0],
-                center[1],
-                c=colors[cluster_idx],
-                label=f"Cluster {cluster_idx + 1}",
+                pop_clusters[0][i],
+                pop_clusters[1][i],
+                c=all_colors[i],
+                label=f"Cluster {i + 1}",
                 s=40,
                 edgecolors="black",
             )
 
-    ax.set_ylim(-radius - 0.3, radius + 0.3)
-    ax.set_xlim(-radius - 0.3, radius + 0.3)
+    ax.set_ylim(-2.3, 2.3)
+    ax.set_xlim(-2.3, 2.3)
+    ax.tick_params(labelsize=20)
     ax.yaxis.set_visible(False)
-    ax.tick_params(axis="both", which="both", bottom=False, top=False, labelbottom=False, width=2)
+    ax.tick_params(
+        axis="both",
+        which="both",
+        bottom=False,
+        top=False,
+        labelbottom=False,
+        width=2,
+    )
     ax.spines[["top", "right", "left", "bottom"]].set_visible(False)
     ax.set_aspect("equal")
 
     return ax
 
 
-def plot_population(pop_base_path, full_experiment, pop_lfm_filename, n_pop, show: bool = True):
-    """Load and optionally plot one saved population.
+def off_diagonal_frobenius_norm(A):
+    """Compute off-diagonal Frobenius norm and ratio."""
+    full_frobenius_norm = np.linalg.norm(A)
+    off_diagonal_mask = np.ones(A.shape, dtype=bool)
+    np.fill_diagonal(off_diagonal_mask, 0)
+    off_diagonal_elements = A[off_diagonal_mask]
+    off_diag_frobenius_norm = np.linalg.norm(off_diagonal_elements)
+    off_diagonal_ratio = off_diag_frobenius_norm / full_frobenius_norm
 
-    This function is mainly kept for compatibility with older notebooks.
-    """
-    pop_base_path = Path(pop_base_path)
-
-    with open(pop_base_path / f"Pop{n_pop}.pkl", "rb") as file:
-        true_population, true_identities = pickle.load(file)
-
-    true_identities = true_identities.astype(int)
-    true_experiment = Experiment(
-        fiber_population=true_population,
-        nerve_topography=full_experiment.nerve_topography,
-        implant=full_experiment.implant,
-    )
-
-    true_experiment.load_lead_field_matrix(
-        hdf5_file_path=pop_base_path / pop_lfm_filename,
-        full_experiment=full_experiment,
-        identities=true_identities,
-    )
-
-    if show:
-        fig, ax = plt.subplots(1, 1, figsize=(3, 3))
-        plot_section(
-            experiment=full_experiment,
-            fiber_population=true_population,
-            cluster_centers=true_population.cluster_locs,
-            ax=ax,
-            marker_color="black",
-        )
-        full_experiment.nerve_topography.plot(ax=ax)
-        plt.show()
-
-    return true_experiment, true_population, true_identities
+    return off_diag_frobenius_norm, off_diagonal_ratio
 
 
-def off_diagonal_frobenius_norm(matrix: np.ndarray) -> tuple[float, float]:
-    """Compute off-diagonal Frobenius norm and its ratio to the full norm."""
-    matrix = np.asarray(matrix)
-
-    full_norm = np.linalg.norm(matrix)
-    off_diagonal_mask = np.ones(matrix.shape, dtype=bool)
-    np.fill_diagonal(off_diagonal_mask, False)
-
-    off_diagonal_norm = np.linalg.norm(matrix[off_diagonal_mask])
-    ratio = off_diagonal_norm / full_norm if full_norm != 0 else 0.0
-
-    return float(off_diagonal_norm), float(ratio)
-
-
-def plot_matrix(matrix: np.ndarray, size: int, title: str):
-    """Plot a lower-triangular colored matrix.
-
-    This is useful for visualizing cross-recruitment or selectivity matrices.
-    """
-    _, frobenius_ratio = off_diagonal_frobenius_norm(matrix)
+def plot_matrix(rc, size, title):
+    """Plot recruitment/selectivity matrix."""
+    _, fro_ratio = off_diagonal_frobenius_norm(rc)
+    mask = np.triu(np.ones_like(rc, dtype=bool))
+    colorList = ["#1f78b4", "#ee7674", "#F6BD60", "#8dd3c7"]
 
     fig, ax = plt.subplots(figsize=(3, 3))
     fig.patch.set_facecolor("white")
 
-    for row_idx in range(size):
-        for col_idx in range(size):
-            intensity = matrix[col_idx, row_idx]
-            color = DEFAULT_CLUSTER_COLORS[row_idx]
+    sns.heatmap(
+        rc,
+        mask=mask,
+        cmap=["white"],
+        cbar=False,
+        annot=False,
+        annot_kws={"size": 13},
+        linewidths=2,
+        linecolor="white",
+    )
 
+    for i in range(size):
+        for j in range(size):
+            intensity = rc[j, i]
+            color = colorList[i]
             ax.add_patch(
                 plt.Rectangle(
-                    (col_idx, row_idx),
+                    (j, i),
                     1,
                     1,
                     color=color,
-                    alpha=float(intensity),
+                    alpha=intensity,
                     ec="white",
                     lw=2,
                 )
             )
 
-            ax.text(
-                col_idx + 0.5,
-                row_idx + 0.5,
-                f"{matrix[col_idx, row_idx]:.2f}",
+    for i in range(size):
+        for j in range(size):
+            plt.text(
+                j + 0.5,
+                i + 0.5,
+                f"{rc[j, i]:.2f}",
                 ha="center",
                 va="center",
                 color="black",
             )
 
-    ax.set_xlim(0, size)
-    ax.set_ylim(size, 0)
     ax.set_xticks(np.arange(size) + 0.5)
     ax.set_xticklabels(np.arange(1, size + 1))
     ax.set_yticks(np.arange(size) + 0.5)
     ax.set_yticklabels(np.arange(1, size + 1))
-    ax.set_title(f"{title}{frobenius_ratio:.3f}", size=15)
+    ax.set_title(title + f"{fro_ratio:.3f}", size=15)
 
     return fig
 
 
-# Backward-compatible aliases.
-plot_recruitment_extended = plot_recruitment_curves
+__all__ = [
+    "DEFAULT_CLUSTER_COLORS",
+    "plot_recruitment_extended",
+    "plot_recruitment_superposed",
+    "plot_section",
+    "off_diagonal_frobenius_norm",
+    "plot_matrix",
+]

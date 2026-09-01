@@ -443,7 +443,7 @@ class MotorFiberPopulation:
         ind_first_node = 0
         central_z = np.zeros(self.n_fibers)
 
-        for i in tqdm(range(self.n_fibers), desc="Generating MRG node locations"):
+        for i in tqdm(range(self.n_fibers), desc=""):
             length_internode = 969.3 * np.log(self.diameters[i]) - 1144.6
             length_flut = 2.5811 * self.diameters[i] + 19.59
             length_stin = (

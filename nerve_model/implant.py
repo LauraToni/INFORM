@@ -104,7 +104,8 @@ class Implant:
             marker="o",
         )
 
-        for site_idx, (x_coord, y_coord) in enumerate(self.site_locs, start=1):
+        for site_idx, site_loc in enumerate(self.site_locs, start=1):
+            x_coord, y_coord = site_loc[:2]
             ax.text(
                 x_coord,
                 y_coord,

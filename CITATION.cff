@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite both the paper and the archived dataset."
+title: "INFORM: Inference of Neural Functional Organization from Recruitment Matching"
+type: software
+authors:
+  - family-names: Toni
+    given-names: Laura
+  - family-names: Fossati
+    given-names: Veronica
+  - family-names: Verardo
+    given-names: Claudio
+  - family-names: Losanno
+    given-names: Elena
+  - family-names: Micera
+    given-names: Silvestro
+  - family-names: Romeni
+    given-names: Simone
+    email: romeni.simone@hsr.it
+license: MIT
+version: 0.1.0
+# Add on release:
+# doi: 10.5281/zenodo.XXXXXXX
+# repository-code: "https://github.com/<your-org>/INFORM"
+preferred-citation:
+  type: article
+  title: "Inferring the internal functional organization of peripheral nerves for selective electrical stimulation"
+  authors:
+    - family-names: Toni
+      given-names: Laura
+    - family-names: Fossati
+      given-names: Veronica
+    - family-names: Verardo
+      given-names: Claudio
+    - family-names: Losanno
+      given-names: Elena
+    - family-names: Micera
+      given-names: Silvestro
+    - family-names: Romeni
+      given-names: Simone
+  year: 2026

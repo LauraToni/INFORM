@@ -216,3 +216,21 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ==========================================================================
+# INFORM-specific: heavy data goes to Zenodo, NOT to git
+# ==========================================================================
+# Lead-field matrices and other large binaries
+*.h5
+*.hdf5
+data/large/
+# Downloaded/expanded archival dataset
+inform-data-*/
+# Working pickles (experiments, populations, results)
+*.pkl
+# Generated figures / results
+results/
+outputs/
+# Vendored third-party library (install from PyPI instead)
+modAL/
+
